@@ -1,0 +1,299 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Reparto Pablo</title>
+<meta name="theme-color" content="#1F5C4A">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:wght@400;700&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#F3F5F4; --panel:#FFFFFF; --ink:#18201D; --muted:#5C6763; --line:#D5DCD9;
+  --ok:#2F7D4F; --ok-bg:#E3F1E8; --pend:#B37A00; --pend-bg:#FBF0D3; --err:#B3261E; --err-bg:#FBE5E3;
+  --accent:#1F5C4A;
+  box-sizing:border-box;
+  padding-top:env(safe-area-inset-top,0px); padding-bottom:env(safe-area-inset-bottom,0px);
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#121614; --panel:#1B211E; --ink:#E8EDEA; --muted:#9AA6A1; --line:#2E3733;
+    --ok:#6FCB94; --ok-bg:#1D3326; --pend:#F0C04A; --pend-bg:#3A2F12; --err:#FF8A80; --err-bg:#3D1F1C; --accent:#7FC9B0;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#121614; --panel:#1B211E; --ink:#E8EDEA; --muted:#9AA6A1; --line:#2E3733;
+  --ok:#6FCB94; --ok-bg:#1D3326; --pend:#F0C04A; --pend-bg:#3A2F12; --err:#FF8A80; --err-bg:#3D1F1C; --accent:#7FC9B0;
+}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+*,*::before,*::after{box-sizing:inherit}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:"Atkinson Hyperlegible",system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;font-size:17px;line-height:1.4}
+header{position:sticky;top:env(safe-area-inset-top,0px);z-index:5;background:var(--bg);border-bottom:1px solid var(--line);padding:10px 14px 8px}
+.top{display:flex;align-items:center;gap:10px}
+h1{font-size:20px;margin:0;flex:1}
+select{font:inherit;font-size:16px;padding:8px 10px;border-radius:10px;border:1px solid var(--line);background:var(--panel);color:var(--ink);max-width:100%}
+.bar{height:6px;background:var(--line);border-radius:3px;margin-top:8px;overflow:hidden}
+.bar>i{display:block;height:100%;background:var(--ok);width:0}
+.sub{font-size:14px;color:var(--muted);margin-top:4px;display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap}
+.tabs{display:flex;gap:6px;margin-top:8px}
+.tabs button{flex:1}
+button{font:inherit;font-weight:700;border-radius:12px;border:1px solid var(--line);background:var(--panel);color:var(--ink);padding:10px 12px;min-height:44px;cursor:pointer}
+button[aria-pressed="true"]{background:var(--ink);color:var(--bg);border-color:var(--ink)}
+button.primary{background:var(--accent);border-color:var(--accent);color:#fff;width:100%;font-size:18px;min-height:54px}
+:root[data-theme="dark"] button.primary{color:#0d1a15}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]) button.primary{color:#0d1a15}}
+button:disabled{opacity:.55}
+button:focus-visible,select:focus-visible,input:focus-visible,a:focus-visible{outline:3px solid var(--accent);outline-offset:2px}
+main{padding:10px 14px 40px;max-width:640px;margin:0 auto}
+.note{padding:10px 12px;border-radius:10px;margin:8px 0;font-size:15px}
+.note.err{background:var(--err-bg);color:var(--err)}
+.note.ok{background:var(--ok-bg);color:var(--ok)}
+.note.pend{background:var(--pend-bg);color:var(--pend)}
+ol.list{list-style:none;margin:0;padding:0}
+ol.list li{display:flex;gap:12px;align-items:stretch;padding:12px 0;border-bottom:1px solid var(--line);cursor:pointer}
+.pos{font-size:26px;font-weight:700;min-width:44px;text-align:right;color:var(--muted);line-height:1.1;font-variant-numeric:tabular-nums}
+li.done .pos{color:var(--ok)}
+.info{flex:1;min-width:0}
+.name{font-weight:700;font-size:17px}
+.addr{color:var(--muted);font-size:15px}
+.hor{font-size:14px;margin-top:3px}
+.tag{display:inline-block;font-size:13px;font-weight:700;padding:2px 8px;border-radius:999px}
+.tag.ok{background:var(--ok-bg);color:var(--ok)}
+.tag.pend{background:var(--pend-bg);color:var(--pend)}
+.tag.off{background:var(--err-bg);color:var(--err)}
+dialog{border:none;border-radius:16px;padding:0;width:min(560px,94vw);max-height:92vh;background:var(--panel);color:var(--ink)}
+dialog::backdrop{background:rgba(0,0,0,.45)}
+.dlg{padding:16px}
+.dlg h2{margin:0 0 2px;font-size:20px}
+.row{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:12px}
+label{display:block;font-size:14px;color:var(--muted)}
+input.hora{font:inherit;font-size:20px;width:100%;padding:8px;border-radius:10px;border:1px solid var(--line);background:var(--bg);color:var(--ink);margin-top:4px}
+.switch{display:flex;align-items:center;gap:10px;margin-top:14px;font-size:17px;color:var(--ink)}
+.switch input{width:26px;height:26px}
+.actions{display:flex;gap:8px;margin-top:16px}
+.actions button{flex:1}
+a{color:var(--accent)}
+.reg{padding:10px 0;border-bottom:1px solid var(--line);font-size:15px}
+.reg b{font-size:16px}
+.hidden{display:none!important}
+</style>
+</head>
+<body>
+<header>
+  <div class="top">
+    <h1>Relevamiento</h1>
+    <select id="zona" aria-label="Zona"></select>
+  </div>
+  <div class="bar"><i id="barra"></i></div>
+  <div class="sub"><span id="avance">Cargando…</span><span id="cola"></span></div>
+  <div class="tabs">
+    <button id="tLista" aria-pressed="true">Clientes</button>
+    <button id="tReg" aria-pressed="false">Registro</button>
+    <button id="tGps" aria-pressed="false">Probar GPS</button>
+  </div>
+</header>
+<main>
+  <div id="aviso"></div>
+  <section id="vLista"><ol class="list" id="lista"></ol></section>
+  <section id="vReg" class="hidden"><div id="regs"></div></section>
+  <section id="vGps" class="hidden">
+    <p>Tocá el botón con el GPS del celular activado. La primera vez el navegador pide permiso: tocá Permitir.</p>
+    <button class="primary" id="btnGps">Leer mi ubicación</button>
+    <div id="gpsRes"></div>
+  </section>
+</main>
+
+<dialog id="dlg">
+  <div class="dlg">
+    <h2 id="dNom"></h2>
+    <div class="addr" id="dDir"></div>
+    <div id="dActual"></div>
+    <div class="switch"><input type="checkbox" id="corta" checked><label for="corta" style="color:inherit;font-size:17px">Corta al mediodía</label></div>
+    <div class="row">
+      <div><label for="abreM">Abre a la mañana</label><input type="text" id="abreM" class="hora" inputmode="numeric" maxlength="5" placeholder="ej. 730" autocomplete="off"></div>
+      <div id="cmBox"><label for="cierraM">Cierra al mediodía</label><input type="text" id="cierraM" class="hora" inputmode="numeric" maxlength="5" placeholder="ej. 730" autocomplete="off"></div>
+      <div id="atBox"><label for="abreT">Abre a la tarde</label><input type="text" id="abreT" class="hora" inputmode="numeric" maxlength="5" placeholder="ej. 730" autocomplete="off"></div>
+      <div><label for="cierraN">Cierra a la noche</label><input type="text" id="cierraN" class="hora" inputmode="numeric" maxlength="5" placeholder="ej. 730" autocomplete="off"></div>
+    </div>
+    <div id="dMsg"></div>
+    <div class="actions"><button id="bCancel">Cancelar</button></div>
+    <div style="margin-top:8px"><button class="primary" id="bGuardar">Guardar horario</button></div>
+    <p class="addr" style="margin:10px 0 0">Al guardar se registran solos la ubicación y la hora.</p>
+    <p style="margin:8px 0 0"><a id="dMapa" target="_blank" rel="noopener">Cómo llegar</a></p>
+  </div>
+</dialog>
+
+<script>
+// ======== CONFIGURACIÓN (pegar el enlace del Apps Script entre las comillas) ========
+const URL_SCRIPT = "https://script.google.com/macros/s/AKfycbwhSdWNxq4FaniMZtIjiif8X7K27oyqqEiiZIY99fGiB5601pSzGwRN3o410xhLiyDC5w/exec";
+const CLAVE = "ESP537-PABLO-2026";
+// ====================================================================================
+(function(){
+  const $ = id => document.getElementById(id);
+  const S = { zonas:[], zonaSel:null, horarios:{}, actual:null };
+  const COLA_KEY="reparto_cola_v2", ZONA_KEY="reparto_zona_v1", DATOS_KEY="reparto_datos_v1";
+  const configurado = URL_SCRIPT.indexOf("https://")===0;
+
+  const pad=n=>String(n).padStart(2,"0");
+  function fFecha(ts){ const d=new Date(ts); return pad(d.getDate())+"/"+pad(d.getMonth()+1)+"/"+d.getFullYear()+" "+pad(d.getHours())+":"+pad(d.getMinutes()); }
+  function el(tag,cls,txt){ const e=document.createElement(tag); if(cls) e.className=cls; if(txt!=null) e.textContent=txt; return e; }
+  function nota(box,tipo,txt){ box.replaceChildren(); if(txt) box.appendChild(el("div","note "+tipo,txt)); }
+  function lsGet(k,d){ try{ const v=localStorage.getItem(k); return v?JSON.parse(v):d; }catch(e){ return d; } }
+  function lsSet(k,v){ try{ localStorage.setItem(k,JSON.stringify(v)); }catch(e){} }
+  function normHora(v){ const d=String(v||"").replace(/\D/g,""); if(!d) return ""; let h,m; if(d.length<=2){h=+d;m=0;} else if(d.length===3){h=+d[0];m=+d.slice(1);} else {h=+d.slice(0,2);m=+d.slice(2,4);} if(h>23||m>59) return null; return String(h).padStart(2,"0")+":"+String(m).padStart(2,"0"); }
+  function txtHorario(h){ if(!h) return ""; return h.corta ? (h.abreM||"?")+"–"+(h.cierraM||"?")+" y "+(h.abreT||"?")+"–"+(h.cierraN||"?") : (h.abreM||"?")+"–"+(h.cierraN||"?")+" corrido"; }
+
+  // ---------- conexión con la planilla ----------
+  async function apiGet(params){
+    const r=await fetch(URL_SCRIPT+"?"+new URLSearchParams(Object.assign({clave:CLAVE},params)));
+    const j=await r.json(); if(j.error) throw new Error(j.error); return j;
+  }
+  async function apiEnviar(regs){
+    const r=await fetch(URL_SCRIPT,{method:"POST",headers:{"Content-Type":"text/plain;charset=utf-8"},body:JSON.stringify({clave:CLAVE,regs})});
+    const j=await r.json(); if(j.error) throw new Error(j.error); return j.ok||[];
+  }
+  async function cargarDatos(){
+    if(!configurado){ $("avance").textContent="Falta pegar el enlace del script en la página."; return; }
+    try{ const d=await apiGet({}); S.zonas=d.zonas||[]; S.horarios=d.horarios||{}; lsSet(DATOS_KEY,{zonas:S.zonas,horarios:S.horarios}); pintarZonas(); pintarLista(); }
+    catch(e){ if(!S.zonas.length) $("avance").textContent="Sin conexión. Abrí la app con señal la primera vez."; }
+  }
+
+  // ---------- GPS ----------
+  function leerGPS(){
+    return new Promise((res,rej)=>{
+      if(!("geolocation" in navigator)) return rej({tipo:"nogps"});
+      navigator.geolocation.getCurrentPosition(
+        p=>res({lat:+p.coords.latitude.toFixed(6),lng:+p.coords.longitude.toFixed(6),acc:Math.round(p.coords.accuracy)}),
+        e=>rej({tipo:e.code===1?"permiso":(e.code===3?"tiempo":"senal")}),
+        {enableHighAccuracy:true,timeout:20000,maximumAge:0});
+    });
+  }
+  function msgGPS(t){
+    if(t==="permiso") return "La ubicación está bloqueada. Permití la ubicación para esta página en el navegador para poder guardar.";
+    if(t==="tiempo") return "No se pudo leer la ubicación a tiempo. Salí a la vereda y tocá Guardar de nuevo.";
+    if(t==="nogps") return "Este navegador no da acceso al GPS.";
+    return "No se pudo leer la ubicación. Revisá que el GPS esté prendido y probá de nuevo.";
+  }
+
+  // ---------- cola sin señal ----------
+  function cola(){ return lsGet(COLA_KEY,[]); }
+  function pintarCola(){ const n=cola().length; $("cola").textContent=n? n+" sin subir":""; }
+  let subiendo=false;
+  async function subirCola(){
+    if(subiendo||!configurado) return; const q=cola(); if(!q.length) return;
+    subiendo=true;
+    try{ const ok=await apiEnviar(q); const resto=cola().filter(r=>ok.indexOf(r.id)<0); lsSet(COLA_KEY,resto); if(ok.length) cargarDatos(); }
+    catch(e){}
+    subiendo=false; pintarCola(); pintarLista();
+  }
+
+  // ---------- render ----------
+  function zonaActual(){ return S.zonas.find(z=>z.id===S.zonaSel); }
+  function pintarZonas(){
+    const sel=$("zona"); sel.replaceChildren();
+    S.zonas.forEach(z=>{ const o=el("option",null,z.nombre); o.value=z.id; sel.appendChild(o); });
+    const guard=lsGet(ZONA_KEY,null);
+    if(!zonaActual()) S.zonaSel = S.zonas.some(z=>z.id===guard) ? guard : (S.zonas[0]&&S.zonas[0].id);
+    if(S.zonaSel) sel.value=S.zonaSel;
+  }
+  function pintarLista(){
+    const z=zonaActual(), ul=$("lista"); ul.replaceChildren();
+    if(!z){ $("barra").style.width="0"; pintarCola(); return; }
+    const pend=new Set(cola().filter(r=>r.tipo==="horario").map(r=>r.cod));
+    let hechos=0;
+    z.clientes.forEach((c,i)=>{
+      const h=S.horarios[c.cod], off=pend.has(c.cod);
+      if(h||off) hechos++;
+      const li=el("li",(h||off)?"done":"");
+      li.appendChild(el("div","pos",String(i+1)));
+      const info=el("div","info");
+      info.appendChild(el("div","name",c.nom+"  ·  "+c.cod));
+      info.appendChild(el("div","addr",c.dir+", "+c.loc));
+      const hor=el("div","hor");
+      if(off) hor.appendChild(el("span","tag off","Guardado sin señal"));
+      else if(h){ hor.appendChild(el("span","tag ok","Horario cargado")); hor.appendChild(document.createTextNode("  "+txtHorario(h))); }
+      else hor.appendChild(el("span","tag pend","Falta horario"));
+      info.appendChild(hor); li.appendChild(info);
+      li.addEventListener("click",()=>abrir(c)); ul.appendChild(li);
+    });
+    $("avance").textContent=hechos+" de "+z.clientes.length+" con horario";
+    $("barra").style.width=z.clientes.length?(100*hechos/z.clientes.length)+"%":"0";
+    pintarCola();
+  }
+  async function pintarRegs(){
+    const box=$("regs"); box.replaceChildren(el("p",null,"Cargando…"));
+    try{
+      const d=await apiGet({accion:"registros"}); box.replaceChildren();
+      if(!d.registros.length){ box.appendChild(el("p",null,"Todavía no hay marcas registradas.")); return; }
+      d.registros.forEach(r=>{
+        const x=el("div","reg");
+        x.appendChild(el("b",null,r.nom+"  ·  "+r.cod));
+        x.appendChild(el("div",null,r.fecha+"  ·  "+(r.tipo==="horario"?"Horario: "+txtHorario(r.horario):r.tipo)));
+        x.appendChild(el("div","addr","GPS ±"+r.acc+" m"+(r.sinSenal?"  ·  guardado sin señal":"")));
+        const a=el("a",null,"Ver en el mapa"); a.href=r.mapa; a.target="_blank"; a.rel="noopener"; x.appendChild(a);
+        box.appendChild(x);
+      });
+    }catch(e){ box.replaceChildren(el("p",null,"Sin conexión. El registro se ve cuando hay señal.")); }
+  }
+
+  // ---------- diálogo ----------
+  function syncCorta(){ const c=$("corta").checked; $("cmBox").classList.toggle("hidden",!c); $("atBox").classList.toggle("hidden",!c); }
+  $("corta").addEventListener("change",syncCorta);
+  function abrir(c){
+    S.actual=c; const h=S.horarios[c.cod];
+    $("dNom").textContent=c.nom+"  ·  "+c.cod; $("dDir").textContent=c.dir+", "+c.loc;
+    $("dMapa").href="https://www.google.com/maps/search/?api=1&query="+encodeURIComponent(c.dir+", "+c.loc+", Buenos Aires");
+    nota($("dActual"),"ok",h?"Cargado el "+h.fecha+": "+txtHorario(h)+". Si cambió, cargá el nuevo.":"");
+    $("corta").checked=h?!!h.corta:true;
+    ["abreM","cierraM","abreT","cierraN"].forEach(k=>$(k).value=h&&h[k]?h[k]:"");
+    syncCorta(); nota($("dMsg"),"",""); $("bGuardar").disabled=false; $("bGuardar").textContent="Guardar horario";
+    $("dlg").showModal();
+  }
+  $("bCancel").addEventListener("click",()=>$("dlg").close());
+  $("bGuardar").addEventListener("click",async()=>{
+    const c=S.actual, corta=$("corta").checked;
+    const hs={}; let mala=false; ["abreM","cierraM","abreT","cierraN"].forEach(k=>{ const n=normHora($(k).value); if(n===null) mala=true; else { hs[k]=n; $(k).value=n; } });
+    if(mala){ nota($("dMsg"),"err","Hay una hora mal escrita. Ejemplos: 730, 1300, 14."); return; }
+    const h={corta,abreM:hs.abreM,cierraM:corta?hs.cierraM:"",abreT:corta?hs.abreT:"",cierraN:hs.cierraN};
+    if(!h.abreM||!h.cierraN||(corta&&(!h.cierraM||!h.abreT))){ nota($("dMsg"),"err","Completá todos los horarios antes de guardar."); return; }
+    const b=$("bGuardar"); b.disabled=true; b.textContent="Leyendo ubicación…";
+    let pos; try{ pos=await leerGPS(); }catch(e){ nota($("dMsg"),"err",msgGPS(e.tipo)); b.disabled=false; b.textContent="Guardar horario"; return; }
+    const ts=Date.now();
+    const reg={id:c.cod+"-"+ts,tipo:"horario",cod:c.cod,nom:c.nom,zona:S.zonaSel,horario:h,lat:pos.lat,lng:pos.lng,acc:pos.acc,ts,offline:false};
+    b.textContent="Guardando…";
+    let ok=false;
+    if(configurado&&navigator.onLine){ try{ const r=await apiEnviar([reg]); ok=r.indexOf(reg.id)>=0; }catch(e){} }
+    if(ok){ S.horarios[c.cod]=Object.assign({},h,{fecha:fFecha(ts),ubic:true}); }
+    else { reg.offline=true; const q=cola(); q.push(reg); lsSet(COLA_KEY,q); }
+    $("dlg").close(); pintarLista();
+    nota($("aviso"),ok?"ok":"pend",ok?"Guardado: "+c.nom+" ("+fFecha(ts)+", GPS ±"+pos.acc+" m).":"Sin señal: "+c.nom+" quedó guardado en el celular y se sube solo cuando vuelva la conexión.");
+  });
+
+  // ---------- pestañas ----------
+  function tab(t){ [["tLista","vLista"],["tReg","vReg"],["tGps","vGps"]].forEach(([b,v])=>{ $(b).setAttribute("aria-pressed",String(b===t)); $(v).classList.toggle("hidden",b!==t); }); }
+  $("tLista").addEventListener("click",()=>tab("tLista"));
+  $("tReg").addEventListener("click",()=>{ tab("tReg"); pintarRegs(); });
+  $("tGps").addEventListener("click",()=>tab("tGps"));
+  document.querySelectorAll("input.hora").forEach(i=>i.addEventListener("blur",()=>{ const n=normHora(i.value); if(n) i.value=n; }));
+  $("zona").addEventListener("change",e=>{ S.zonaSel=e.target.value; lsSet(ZONA_KEY,S.zonaSel); pintarLista(); window.scrollTo(0,0); });
+  $("btnGps").addEventListener("click",async()=>{
+    const b=$("btnGps"); b.disabled=true; b.textContent="Leyendo…";
+    try{ const p=await leerGPS(); const box=$("gpsRes"); box.replaceChildren();
+      box.appendChild(el("div","note ok","GPS funcionando. Precisión ±"+p.acc+" m ("+fFecha(Date.now())+")."));
+      const a=el("a",null,"Ver dónde estoy en el mapa"); a.href="https://www.google.com/maps/search/?api=1&query="+p.lat+","+p.lng; a.target="_blank"; a.rel="noopener"; box.appendChild(a);
+    }catch(e){ nota($("gpsRes"),"err",msgGPS(e.tipo)); }
+    b.disabled=false; b.textContent="Leer mi ubicación";
+  });
+  window.addEventListener("online",subirCola);
+  document.addEventListener("visibilitychange",()=>{ if(!document.hidden){ subirCola(); cargarDatos(); } });
+  setInterval(()=>{ if(cola().length&&navigator.onLine) subirCola(); },60000);
+
+  // ---------- arranque: primero lo guardado en el celular, después la planilla ----------
+  const cache=lsGet(DATOS_KEY,null);
+  if(cache){ S.zonas=cache.zonas||[]; S.horarios=cache.horarios||{}; pintarZonas(); pintarLista(); }
+  cargarDatos(); subirCola();
+})();
+</script>
+</body>
+</html>

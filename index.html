@@ -110,6 +110,7 @@ input.pinin{font:inherit;font-size:26px;letter-spacing:6px;text-align:center;wid
     <div id="gpsRes"></div>
     <hr style="margin:22px 0;border:0;border-top:1px solid var(--line)">
     <p id="rolTxt" class="addr"></p>
+    <p id="verTxt" class="addr"></p>
     <button id="bSalir">Salir de este celular</button>
   </section>
 </main>
@@ -186,6 +187,14 @@ const URL_SCRIPT = "https://script.google.com/macros/s/AKfycbwhSdWNxq4FaniMZtIji
   }
 
   // ---------- PIN y rol ----------
+  const VER="3";
+  function estadoApp(){
+    const t=$("verTxt"); if(!t) return;
+    if(!("serviceWorker" in navigator)){ t.textContent="Versión "+VER+" · este navegador no puede guardar la app para usarla sin señal."; return; }
+    navigator.serviceWorker.getRegistration().then(r=>{
+      t.textContent="Versión "+VER+" · "+((r&&r.active)?"guardada: abre aunque no haya señal.":"todavía no guardada para usar sin señal. Abrila una vez con internet.");
+    }).catch(()=>{ t.textContent="Versión "+VER; });
+  }
   function aplicarRol(){
     const adm=S.rol==="admin";
     $("tReg").classList.toggle("hidden",!adm);
@@ -355,7 +364,7 @@ const URL_SCRIPT = "https://script.google.com/macros/s/AKfycbwhSdWNxq4FaniMZtIji
   function tab(t){ [["tLista","vLista"],["tReg","vReg"],["tGps","vGps"]].forEach(([b,v])=>{ $(b).setAttribute("aria-pressed",String(b===t)); $(v).classList.toggle("hidden",b!==t); }); }
   $("tLista").addEventListener("click",()=>tab("tLista"));
   $("tReg").addEventListener("click",()=>{ tab("tReg"); pintarRegs(); });
-  $("tGps").addEventListener("click",()=>tab("tGps"));
+  $("tGps").addEventListener("click",()=>{ tab("tGps"); estadoApp(); });
   document.querySelectorAll("input.hora").forEach(i=>i.addEventListener("blur",()=>{ const n=normHora(i.value); if(n) i.value=n; }));
   $("zona").addEventListener("change",e=>{ S.zonaSel=e.target.value; lsSet(ZONA_KEY,S.zonaSel); pintarLista(); window.scrollTo(0,0); });
   $("btnGps").addEventListener("click",async()=>{
@@ -373,7 +382,7 @@ const URL_SCRIPT = "https://script.google.com/macros/s/AKfycbwhSdWNxq4FaniMZtIji
   // ---------- arranque: primero lo guardado en el celular, después la planilla ----------
   if(!PIN){ try{ localStorage.removeItem(DATOS_KEY); }catch(e){} }
   const cache=PIN?lsGet(DATOS_KEY,null):null;
-  aplicarRol();
+  aplicarRol(); estadoApp();
   if(cache){ S.zonas=cache.zonas||[]; S.horarios=cache.horarios||{}; pintarZonas(); pintarLista(); }
   cargarDatos(); subirCola();
 })();

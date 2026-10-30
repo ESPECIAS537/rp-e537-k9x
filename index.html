@@ -89,6 +89,20 @@ ol.cards{list-style:none;margin:0;padding:0}
 .card .ttl{display:flex;gap:10px;align-items:flex-start}
 .pos2{font-size:24px;font-weight:700;color:var(--muted);min-width:34px;text-align:right;line-height:1.1;font-variant-numeric:tabular-nums}
 .card.hecho .pos2{color:var(--ok)}
+.card.abierta{border:2px solid var(--accent);scroll-margin-top:12px}
+.card.compacta{padding:6px 8px;margin:0 0 6px;cursor:pointer}
+.card.compacta .ttl{display:flex;align-items:stretch;gap:5px}
+.card.compacta .info{flex:1;min-width:0}
+.card.compacta button.flecha{flex:0 0 30px;min-height:44px;padding:0;font-size:12px;line-height:1;font-weight:400;border-radius:10px;color:var(--muted);background:transparent}
+.card.compacta button.flecha:disabled{opacity:.3}
+.card.compacta .dir{font-size:14px;line-height:1.2;font-weight:700;overflow-wrap:anywhere;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}   /* si la calle es larga pasa a 2 renglones, así no se pierde el número */
+.card.compacta .name{font-size:12px;font-weight:400;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.card.compacta .hor{margin-top:2px}
+.card.compacta .tag{font-size:11px;padding:0 6px}
+.card.compacta .hor{line-height:1.45}
+.vistaRow{display:flex;justify-content:flex-end;margin:0 0 6px}
+.rev .dirl{color:var(--ink);font-weight:600}
+button.vista{font-size:13px;min-height:32px;padding:4px 12px;font-weight:400}
 .tag.green{background:var(--ok-bg);color:var(--ok)}
 .tag.amber{background:var(--pend-bg);color:var(--pend)}
 .tag.red{background:var(--err-bg);color:var(--err)}
@@ -889,7 +903,7 @@ const URL_SCRIPT = "https://script.google.com/macros/s/AKfycbwhSdWNxq4FaniMZtIji
   }
 
   // ---------- PIN y rol ----------
-  const VER="12g";
+  const VER="12k";
   function estadoApp(){
     const t=$("verTxt"); if(!t) return;
     if(!("serviceWorker" in navigator)){ t.textContent="Versión "+VER+" · este navegador no puede guardar la app para usarla sin señal."; return; }
@@ -999,7 +1013,7 @@ const URL_SCRIPT = "https://script.google.com/macros/s/AKfycbwhSdWNxq4FaniMZtIji
     pintarCola();
   }
   // ---------- HOY: plan del día, visitas y orden sugerido ----------
-  const P_=window.RepartoPlan, PLAN_KEY="reparto_plan_v1", OBJ_KEY="reparto_obj_v1", DIST_LEJOS=150;
+  const P_=window.RepartoPlan, PLAN_KEY="reparto_plan_v1", COMPACTO_KEY="reparto_compacto_v1", OBJ_KEY="reparto_obj_v1", DIST_LEJOS=150;
   const CODIGO={visita:"v",cerrado:"c",pendiente:"p",inicio:"i",llegada:"l",anulaLlegada:"x",sinHorario:"h"};
   const TURNO_KEY="reparto_turno_v1";
   function turnoActual(){ const t=lsGet(TURNO_KEY,null); return (t&&t.fecha===fechaLocal()&&(t.t==="manana"||t.t==="tarde"))?t.t:P_.turnoAhora(Date.now()); }
@@ -1017,7 +1031,7 @@ const URL_SCRIPT = "https://script.google.com/macros/s/AKfycbwhSdWNxq4FaniMZtIji
     cola().forEach(r=>{ const t=CODIGO[r.tipo]; if(t&&!ids.has(r.id)){ ids.add(r.id); out.push({c:r.cod,t:t,ts:r.ts,id:r.id}); } });
     return out;
   }
-  function nuevaMarca(reg){ S.marcas.push({c:reg.cod,t:CODIGO[reg.tipo],ts:reg.ts,id:reg.id}); guardarCache(); }
+  function nuevaMarca(reg){ S.marcas.push({c:reg.cod,t:CODIGO[reg.tipo],ts:reg.ts,id:reg.id}); guardarCache(); if(reg.tipo==="visita"||reg.tipo==="cerrado"||reg.tipo==="pendiente"){ S.abierto=null; S.irAbierto=true; } }   // después de marcar o deshacer, se abre solo el que sigue
 
   function planDeHoy(){ const p=lsGet(PLAN_KEY,null), f=fechaLocal(); return (p&&p.fecha===f)?p:{fecha:f,zonas:{}}; }
   // Clientes que se saltó hoy con "Empezar acá" (si después los visita, no cuentan como avance del recorrido).
@@ -1164,6 +1178,45 @@ const URL_SCRIPT = "https://script.google.com/macros/s/AKfycbwhSdWNxq4FaniMZtIji
   $("margen").value=String(lsGet(MARGEN_KEY,15));
   $("margen").addEventListener("change",e=>{ lsSet(MARGEN_KEY,Number(e.target.value)); });
 
+  // Dirección de un cliente ("calle y número, localidad"), igual en las filitas, en el cliente abierto, en Control y en el Excel.
+  const dirTxt=c=>c?[c.dir,c.loc].filter(x=>x&&String(x).trim()).join(", "):"";
+  let _dirMapa=null, _dirZonas=null;
+  function dirDe(cod){
+    if(_dirZonas!==S.zonas){ _dirMapa={}; S.zonas.forEach(z=>z.clientes.forEach(c=>{ _dirMapa[String(c.cod)]=dirTxt(c); })); _dirZonas=S.zonas; }
+    return _dirMapa[String(cod)]||"";
+  }
+  // Vista compacta: el cliente que se atiende se ve completo (todos los botones) y los demás en una filita que se abre al tocarla.
+  // Se ven completos: el que Pablo abrió tocándolo, el que tiene "Llegué" en curso y, si no hay ninguno de los dos, el primero de la lista.
+  const vistaCompacta=()=>lsGet(COMPACTO_KEY,"1")!=="0";
+  function codsAbiertos(pend){
+    const out={};
+    pend.forEach(c=>{ if(llegadaDe(c.cod)) out[c.cod]=true; });
+    if(S.abierto&&pend.some(c=>c.cod===S.abierto)) out[S.abierto]=true;
+    if(!Object.keys(out).length&&pend.length) out[pend[0].cod]=true;
+    return out;
+  }
+  function tarjetaCompacta(c,o){
+    const li=el("li","card compacta"), ttl=el("div","ttl");
+    li.tabIndex=0; li.setAttribute("role","button"); li.setAttribute("aria-expanded","false");
+    const flecha=(txt,delta,desactivada,aria)=>{ const b=el("button","flecha",txt); b.type="button"; b.setAttribute("aria-label",aria); b.disabled=desactivada;
+      b.addEventListener("click",ev=>{ ev.stopPropagation(); mover(c.cod,delta,o.visibles); }); return b; };
+    const info=el("div","info"), dl=el("div","dir",o.pos+"  ·  "+(c.dir&&String(c.dir).trim()||c.nom)), nm=el("div","name",c.nom+"  ·  "+c.cod+(c.loc&&String(c.loc).trim()?"  ·  "+c.loc:""));   // calle y número arriba (completos); abajo nombre, código y localidad
+    info.appendChild(dl);
+    if(o.deAyer){ nm.appendChild(document.createTextNode(" ")); nm.appendChild(el("span","tag amber","De ayer")); }
+    info.appendChild(nm);
+    const hor=el("div","hor");
+    P_.etiquetas(S.horarios[c.cod],turnoActual()).forEach(t=>{ hor.appendChild(el("span","tag "+t.cls,t.txt)); hor.appendChild(document.createTextNode(" ")); });
+    const pc=P_.prioridadCompra(c.ult,Date.now());
+    if(pc){ hor.appendChild(el("span","tag "+pc.cls,pc.dias==null?"Sin compras":pc.dias+" días")); hor.appendChild(document.createTextNode(" ")); }
+    if(o.atras) hor.appendChild(el("span","tag red","Quedó atrás"));
+    info.appendChild(hor);
+    ttl.appendChild(flecha("▲",-1,o.pos<=1,"Subir un lugar")); ttl.appendChild(info); ttl.appendChild(flecha("▼",1,!!o.ultimo,"Bajar un lugar"));
+    li.appendChild(ttl);
+    const abrirFila=()=>{ S.abierto=c.cod; S.irAbierto=true; pintarHoy(); };
+    li.addEventListener("click",abrirFila);
+    li.addEventListener("keydown",ev=>{ if(ev.target===li&&(ev.key==="Enter"||ev.key===" ")){ ev.preventDefault(); abrirFila(); } });
+    return li;
+  }
   function tarjetaHoy(c,o){
     const li=el("li","card"+(o.tipo==="hecho"?" hecho":""));
     const ttl=el("div","ttl"); ttl.appendChild(el("div","pos2",o.pos?String(o.pos):"✓"));
@@ -1253,6 +1306,7 @@ const URL_SCRIPT = "https://script.google.com/macros/s/AKfycbwhSdWNxq4FaniMZtIji
     const chips=el("div","chips");
     [["Hechos",hechos.length],["Faltan",pend.length],["Volver a pasar",volver.length]].forEach(([t,v])=>{ const s=el("span","chip"); s.appendChild(el("b",null,String(v))); s.appendChild(document.createTextNode(" "+t)); chips.appendChild(s); });
     top.appendChild(chips);
+    if(pend.length>1){ const vr=el("div","vistaRow"), vb=el("button","vista",vistaCompacta()?"Ver todo completo":"Ver compacto"); vb.id="bVista"; vb.addEventListener("click",()=>{ lsSet(COMPACTO_KEY,vistaCompacta()?"0":"1"); S.abierto=null; pintarHoy(); }); vr.appendChild(vb); top.appendChild(vr); }
     { const arr=(planDeHoy().arranque||{})[kz(z)]; if(!arr&&!zonaConMarcas(z)&&z.clientes.length) top.appendChild(cajaArranque(z)); }
     if(pend.length){
       const p=pend[0], hp=S.horarios[p.cod], bar=el("div","sigbar");
@@ -1264,7 +1318,11 @@ const URL_SCRIPT = "https://script.google.com/macros/s/AKfycbwhSdWNxq4FaniMZtIji
       else if(sin) top.appendChild(el("div","motivo",sin+" de "+pend.length+" sin horario: van en orden de recorrido."));
     }
     const visibles=pend.map(c=>c.cod);
-    pend.forEach((c,i)=>{ const r=porCod[c.cod]; lista.appendChild(tarjetaHoy(c,{tipo:"plan",pos:i+1,motivo:(zp.motivos||{})[c.cod],visibles:visibles,siguiente:pend[i+1]||null,deAyer:!!(zp.deAyer&&zp.deAyer[c.cod]),atras:maxOff>=0&&off(r.i)<maxOff-P_.CFG.VENTANA})); });
+    const compacta=vistaCompacta(), abiertos=compacta?codsAbiertos(pend):null;
+    pend.forEach((c,i)=>{ const r=porCod[c.cod], o={tipo:"plan",pos:i+1,motivo:(zp.motivos||{})[c.cod],visibles:visibles,siguiente:pend[i+1]||null,ultimo:i===pend.length-1,deAyer:!!(zp.deAyer&&zp.deAyer[c.cod]),atras:maxOff>=0&&off(r.i)<maxOff-P_.CFG.VENTANA};
+      if(compacta&&!abiertos[c.cod]) lista.appendChild(tarjetaCompacta(c,o));
+      else { const li=tarjetaHoy(c,o); if(compacta) li.classList.add("abierta"); lista.appendChild(li); } });
+    if(compacta&&S.irAbierto){ S.irAbierto=false; const ab=lista.querySelector("li.card.abierta"); if(ab&&ab.scrollIntoView) ab.scrollIntoView({behavior:"smooth",block:"start"}); }
     $("hoySalida").classList.toggle("hidden",!pend.length);
     if(!pend.length){
       if(hechos.length||volver.length){
@@ -1467,6 +1525,7 @@ const URL_SCRIPT = "https://script.google.com/macros/s/AKfycbwhSdWNxq4FaniMZtIji
   function filaRevisar(x,conFecha){
     const d=el("div","rev "+x.sev), t=el("div","revt");
     t.appendChild(el("b",null,x.cliente)); t.appendChild(el("span","pilla "+x.sev,x.tag)); d.appendChild(t);
+    { const dr=x.cod?dirDe(x.cod):""; if(dr) d.appendChild(el("div","addr dirl",dr)); }
     d.appendChild(el("div","addr",(conFecha&&x.fecha?fmtDMY(new Date(x.fecha)).slice(0,5)+" · ":"")+x.zona+(x.detalle?" · "+x.detalle:"")));
     if(x.tipo==="salteado"){ const l=el("div","revx"); if(x.extra) l.appendChild(el("span","tag "+(x.cls||"gray"),x.extra)); l.appendChild(document.createTextNode(" "+(x.estado==="Pendiente"?"· sigue pendiente":"· visitado después"))); d.appendChild(l); }
     if(x.cod){ const en=enlaces({cod:x.cod}); if(en) d.appendChild(en); }
@@ -1474,16 +1533,20 @@ const URL_SCRIPT = "https://script.google.com/macros/s/AKfycbwhSdWNxq4FaniMZtIji
   }
   const urlPunto=(lat,lng)=>"https://www.google.com/maps/search/?api=1&query="+lat+","+lng;
   const urlNegocio=cod=>{ const h=S.horarios[cod]; return (h&&h.lat!=null&&h.lng!=null)?urlPunto(h.lat,h.lng):""; };
+  // Para ir a ver el negocio: si ya tiene la ubicación guardada (GPS) se abre ese punto exacto; si no, se busca la dirección en el mapa (igual que "Cómo llegar" en Hoy).
+  const urlDireccion=cod=>{ const dr=dirDe(cod); return dr?"https://www.google.com/maps/search/?api=1&query="+encodeURIComponent(dr+", Buenos Aires"):""; };
+  function linkNegocio(cod){ const n=urlNegocio(cod); if(n) return {url:n,txt:"Ver negocio"}; const d=urlDireccion(cod); return d?{url:d,txt:"Ver por dirección"}:null; }
   // "Ver dónde marcó" (donde estaba Pablo al marcar) y "Ver negocio" (la ubicación fija del negocio, si ya está cargada)
   function enlaces(x){
     const e=el("div","enl");
     if(x.mapa&&String(x.mapa).indexOf("http")===0) e.appendChild(linkMaps("Ver dónde marcó",x.mapa,"enlace"));
-    const n=urlNegocio(x.cod); if(n) e.appendChild(linkMaps("Ver negocio",n,"enlace"));
+    const ln=linkNegocio(x.cod); if(ln) e.appendChild(linkMaps(ln.txt,ln.url,"enlace"));
     return e.children.length?e:null;
   }
   function filaCliente(x,conFecha){
     const d=el("div","rev "+(x.sev||"gris")), t=el("div","revt");
     t.appendChild(el("b",null,x.nom+" ("+x.cod+")")); t.appendChild(el("span","pilla "+(x.sev||"gris"),x.tag)); d.appendChild(t);
+    { const dr=dirDe(x.cod); if(dr) d.appendChild(el("div","addr dirl",dr)); }
     const partes=[]; if(conFecha&&x.fecha) partes.push(fmtDMY(new Date(x.fecha)).slice(0,5)); if(x.hora) partes.push(x.hora); partes.push(x.zona);
     if(x.estado==="visita") partes.push(x.seg!=null?"estuvo "+P_.fmtDur(x.seg):"tiempo sin medir");
     if(x.extra) partes.push(x.extra);
@@ -1513,15 +1576,15 @@ const URL_SCRIPT = "https://script.google.com/macros/s/AKfycbwhSdWNxq4FaniMZtIji
     if(R.capacidad){ const c=R.capacidad; resumen.push([],["Padrón: visitas que hacen falta por mes (una cada 30 días)",c.padron],["Capacidad del mes (visitas)",c.capacidad],["Diferencia",c.diferencia],["Uso de la capacidad (%)",Math.round(c.uso*100)]); }
     resumen.push([],["Colores del arranque","Verde hasta "+P_.fmtMin(P_.CFG.ARRANQUE_VERDE)+", amarillo hasta "+P_.fmtMin(P_.CFG.ARRANQUE_AMBAR)+", rojo después"]);
     const dias=[["Fecha","Día","Arrancó","Terminó","Jornada (min)","Visitas","Color del arranque","Zonas"]].concat(R.dias.map(D=>[f(D.fecha),DS[new Date(D.fecha).getDay()],D.hArranque,D.hFin,D.minutos,D.visitas,COL[D.clase],D.zonas.map(z=>z.zona).join(", ")]));
-    const cli=[["Fecha","Hora","Estado","Código","Cliente","Zona","Estuvo (min)","Última compra","Días sin comprar","Nota","Dónde marcó","Negocio"]].concat(R.clientes.map(x=>{
-      const c=porCod[String(x.cod)]||{}, ult=c.ult||"", dd=P_.diasDesde(ult,ahora), neg=urlNegocio(String(x.cod)), marc=(x.mapa&&String(x.mapa).indexOf("http")===0)?x.mapa:"";
-      return [f(x.fecha),x.hora||"",x.tag,x.cod,x.nom,x.zona,x.seg==null?"":r1(x.seg/60),ult,dd==null?"":dd,x.extra||"",marc?{url:marc,txt:"Ver dónde marcó"}:"",neg?{url:neg,txt:"Ver negocio"}:""];
+    const cli=[["Fecha","Hora","Estado","Código","Cliente","Dirección","Zona","Estuvo (min)","Última compra","Días sin comprar","Nota","Dónde marcó","Negocio"]].concat(R.clientes.map(x=>{
+      const c=porCod[String(x.cod)]||{}, ult=c.ult||"", dd=P_.diasDesde(ult,ahora), neg=linkNegocio(String(x.cod)), marc=(x.mapa&&String(x.mapa).indexOf("http")===0)?x.mapa:"";
+      return [f(x.fecha),x.hora||"",x.tag,x.cod,x.nom,dirDe(x.cod),x.zona,x.seg==null?"":r1(x.seg/60),ult,dd==null?"":dd,x.extra||"",marc?{url:marc,txt:"Ver dónde marcó"}:"",neg?{url:neg.url,txt:neg.txt}:""];
     }));
     const ale=[["Tipo","Cliente","Zona","Fecha","Hora","Detalle"]].concat(R.revisar.filter(x=>x.tipo!=="salteado").map(x=>[x.tag,x.cliente,x.zona,f(x.fecha),x.hora||"",x.detalle||""]));
     return [
       {nombre:"Resumen",titulo:true,negritaCol0:true,anchos:[52,34],filas:resumen},
       {nombre:"Por día",encabezado:true,anchos:[12,6,10,10,14,9,18,30],filas:dias},
-      {nombre:"Clientes",encabezado:true,anchos:[12,8,11,9,34,18,12,28,16,26,17,14],filas:cli},
+      {nombre:"Clientes",encabezado:true,anchos:[12,8,11,9,30,34,18,12,28,16,26,17,14],filas:cli},
       {nombre:"Alertas",encabezado:true,anchos:[20,36,18,12,8,60],filas:ale}
     ];
   }

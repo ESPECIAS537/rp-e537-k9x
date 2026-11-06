@@ -101,6 +101,10 @@ ol.cards{list-style:none;margin:0;padding:0}
 .card.compacta .tag{font-size:11px;padding:0 6px}
 .card.compacta .hor{line-height:1.45}
 .vistaRow{display:flex;justify-content:flex-end;margin:0 0 6px}
+.mfila{display:flex;gap:8px;flex-wrap:wrap;margin:8px 0}.mfila select,.mfila input{min-height:40px;font-size:15px}
+.mlista{max-height:62vh;overflow:auto;margin-top:6px;border-top:1px solid rgba(0,0,0,.12)}
+.mrow{display:flex;gap:10px;align-items:flex-start;padding:8px 4px;border-bottom:1px solid rgba(0,0,0,.12);cursor:pointer}
+input.mchk{width:24px;height:24px;flex:0 0 24px;margin-top:2px}.mdir{font-weight:700}.mname{font-size:13px;color:var(--muted)}
 .rev .dirl{color:var(--ink);font-weight:600}
 button.vista{font-size:13px;min-height:32px;padding:4px 12px;font-weight:400}
 .tag.green{background:var(--ok-bg);color:var(--ok)}
@@ -232,7 +236,8 @@ input.pinin{font:inherit;font-size:26px;letter-spacing:6px;text-align:center;wid
     </div>
     <div class="ctl"><button id="cPrev" aria-label="Anterior">◀</button><b id="cFecha"></b><button id="cNext" aria-label="Siguiente">▶</button></div>
     <div id="cRango" class="hidden" style="display:flex;gap:8px;align-items:end;flex-wrap:wrap;margin-bottom:8px"><label>Desde<input type="date" id="cDesde"></label><label>Hasta<input type="date" id="cHasta"></label><button id="cVer">Ver</button></div>
-    <div style="margin-bottom:8px;display:flex;gap:8px;flex-wrap:wrap"><button id="cAct">Actualizar</button><button id="cExcel" disabled>Descargar Excel</button></div>
+    <div style="margin-bottom:8px;display:flex;gap:8px;flex-wrap:wrap"><button id="cAct">Actualizar</button><button id="cExcel" disabled>Descargar Excel</button><button id="cManualBtn">Cargar visitas que faltaron</button></div>
+    <div id="cManual" class="hidden"></div>
     <div id="cCuerpo"></div>
   </section>
   <section id="vGps" class="hidden">
@@ -431,6 +436,7 @@ window.RepartoPlan=(function(){
   var CODIGO_TIPO={visita:"v",cerrado:"c",pendiente:"p",inicio:"i",llegada:"l",anulaLlegada:"x",sinHorario:"h"};
   function fechaDMY(str){ var m=String(str||"").match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})/); return m?new Date(+m[3],+m[2]-1,+m[1]).getTime():null; }
   function minHora(h){ var m=String(h||"").match(/^(\d{1,2}):(\d{2})(?::(\d{2}))?/); return m?(+m[1])*60+(+m[2])+(m[3]?(+m[3])/60:0):null; }
+  function esManual(m){ return /^Cargada a mano/.test(String((m&&m.motivo)||"")); }   // visita cargada por Adrián a mano (sin ubicación ni hora real)
   function hmLlegada(m){ var h=String((m&&m.llegada)||"").match(/^(\d{1,2}):(\d{2})/); return h?("0"+h[1]).slice(-2)+":"+h[2]:""; }   // "09:12:30" -> "09:12"
   function fmtHM(min){ min=Math.round(min); var h=Math.floor(min/60), m=min%60; return h+":"+(m<10?"0":"")+m; }
   function promedio(a){ return a.length?a.reduce(function(x,y){return x+y;},0)/a.length:null; }
@@ -448,6 +454,7 @@ window.RepartoPlan=(function(){
     var hist=(o.marcasApp||[]).slice();
     cm.forEach(function(m){ var t=CODIGO_TIPO[m.tipo]; if(t) hist.push({c:String(m.cod),t:t,ts:m.ts,id:m.id}); });
     var vis=cm.filter(function(m){return m.tipo==="visita";}), cer=cm.filter(function(m){return m.tipo==="cerrado";});
+    var anul=cm.filter(function(m){return m.tipo==="anulaLlegada";}), llegadaValida=function(m){ return m.tipo!=="llegada"||!anul.some(function(a){ return String(a.cod)===String(m.cod)&&a.ts>=m.ts; }); };   // "Anular llegada" cancela esa llegada
     var porDia={}; cm.forEach(function(m){ (porDia[m.d0]=porDia[m.d0]||[]).push(m); });
     var diasTrab=Object.keys(porDia).map(Number).filter(function(d){ return porDia[d].some(function(m){return m.tipo==="visita";}); }).sort();
     var res={ visitas:vis.length, cerrados:cer.length, nDias:diasTrab.length, salteados:[], revisar:[], zonas:[], jornada:null, enNegocioMin:null, viajeMin:null, visitasPorDia:null, capacidad:null, sinMedir:0, horarios:cm.filter(function(m){return m.tipo==="horario"||m.tipo==="manual";}).length };
@@ -456,7 +463,7 @@ window.RepartoPlan=(function(){
     // jornada: primera y última marca de cada día; tiempo en el negocio; viaje entre clientes
     var prim=[], ult=[], span=[], viajes=[];
     diasTrab.forEach(function(d){
-      var mk=porDia[d].filter(function(m){return m.tipo==="visita"||m.tipo==="cerrado";}).sort(function(a,b){ return minHora(a.hora)-minHora(b.hora); });
+      var mk=porDia[d].filter(function(m){return (m.tipo==="visita"||m.tipo==="cerrado")&&!esManual(m);}).sort(function(a,b){ return minHora(a.hora)-minHora(b.hora); });
       if(!mk.length) return;
       var a=mk[0], pa=minHora(a.llegada), primera=(pa!=null&&pa<=minHora(a.hora))?pa:minHora(a.hora), ultima=minHora(mk[mk.length-1].hora);
       prim.push(primera); ult.push(ultima); if(mk.length>1) span.push(ultima-primera);
@@ -465,7 +472,7 @@ window.RepartoPlan=(function(){
     if(prim.length) res.jornada={primera:fmtHM(promedio(prim)),ultima:fmtHM(promedio(ult)),minutos:span.length?Math.round(promedio(span)):null};
     var segs=vis.filter(function(m){return m.seg!=null&&isFinite(m.seg);}).map(function(m){return m.seg/60;});
     res.enNegocioMin=promedio(segs); res.viajeMin=promedio(viajes);
-    res.sinMedir=vis.filter(function(m){return m.seg==null;}).length;
+    res.sinMedir=vis.filter(function(m){return m.seg==null&&!esManual(m);}).length;
 
     // salteados (la regla de la app: lo que quedó entre el primero y el último visitado, más lo que se saltó con "Empezar acá")
     var evAll=eventos(dedupe(hist)), nZ={};
@@ -491,7 +498,7 @@ window.RepartoPlan=(function(){
     var porCod={}; zonas.forEach(function(z){ z.clientes.forEach(function(c){ porCod[String(c.cod)]={c:c,zona:z.nombre||z.id}; }); });
     var infoCompra=function(cod){ var r=porCod[String(cod)], pc=r?prioridadCompra(r.c.ult,ahora):null; return pc?{ult:pc.txt,cls:pc.cls}:{ult:"",cls:""}; };
     var unicos=function(arr){ var m={}; arr.slice().sort(function(a,b){ return (a.d0-b.d0)||(minHora(a.hora)-minHora(b.hora)); }).forEach(function(x){ m[x.d0+"|"+x.cod]=x; }); return Object.keys(m).map(function(k){return m[k];}).sort(function(a,b){ return (a.d0-b.d0)||(minHora(a.hora)-minHora(b.hora)); }); };
-    res.listaVisitados=unicos(vis).map(function(m){ var i=infoCompra(m.cod), ur=(porCod[String(m.cod)]||{c:{}}).c.ult||"", cp=compraDesdeVisita(ur,m.d0,ahora); return {fecha:m.d0,hora:hmLlegada(m)||m.hora,horaLlegada:hmLlegada(m),horaMarca:m.hora,cod:String(m.cod),nom:m.nom,zona:m.zona,seg:m.seg,estado:"visita",tag:"Visitado",sev:"ok",ult:i.ult,cls:i.cls,compra:cp.estado,compraFecha:cp.fecha,mapa:m.mapa||"",lat:m.lat,lng:m.lng}; });
+    res.listaVisitados=unicos(vis).map(function(m){ var i=infoCompra(m.cod), ur=(porCod[String(m.cod)]||{c:{}}).c.ult||"", cp=compraDesdeVisita(ur,m.d0,ahora); return {fecha:m.d0,hora:hmLlegada(m)||m.hora,horaLlegada:hmLlegada(m),horaMarca:m.hora,cod:String(m.cod),nom:m.nom,zona:m.zona,seg:m.seg,estado:"visita",tag:"Visitado",sev:"ok",manual:esManual(m),extra:esManual(m)?"cargada a mano":"",ult:i.ult,cls:i.cls,compra:cp.estado,compraFecha:cp.fecha,mapa:m.mapa||"",lat:m.lat,lng:m.lng}; });
     // cuántos de los visitados compraron, y hasta qué fecha llegan las ventas cargadas (para saber si la importación está al día)
     (function(){ var cc={compro:0,sin:0,espera:0}, hasta=null;
       res.listaVisitados.forEach(function(x){ cc[x.compra]++; });
@@ -505,7 +512,7 @@ window.RepartoPlan=(function(){
     // horario de arranque y de fin de cada día y de cada zona: la primera y la última marca del día, sin importar con qué cliente
     var claseArr=function(min){ return min<=CFG.ARRANQUE_VERDE?"ok":(min<=CFG.ARRANQUE_AMBAR?"pend":"err"); };
     res.dias=diasTrab.map(function(d){
-      var mk=porDia[d].filter(function(m){return m.tipo==="llegada"||m.tipo==="visita"||m.tipo==="cerrado";});
+      var mk=porDia[d].filter(function(m){return (m.tipo==="llegada"||m.tipo==="visita"||m.tipo==="cerrado")&&!esManual(m)&&llegadaValida(m);});
       if(!mk.length) return null;
       var porZ={}, a=Infinity, f=-Infinity, nv=0;
       mk.forEach(function(m){
@@ -793,7 +800,7 @@ window.RepartoPlan=(function(){
 
   return {CFG:CFG,toMin:toMin,fmtMin:fmtMin,apertura:apertura,cierre:cierre,abiertoEn:abiertoEn,estadoAhora:estadoAhora,etiquetas:etiquetas,distM:distM,
     dedupe:dedupe,inicioDia:inicioDia,eventos:eventos,ultimaVisita:ultimaVisita,estadoCliente:estadoCliente,indicePartida:indicePartida,
-    armarPlan:armarPlan,huecoInicio:huecoInicio,resumenControl:resumenControl,parseFecha:parseFecha,diasDesde:diasDesde,prioridadCompra:prioridadCompra,sinHorarioDesde:sinHorarioDesde,fmtDur:fmtDur,fmtCron:fmtCron,llegadaAbierta:llegadaAbierta,duraciones:duraciones,viajes:viajes,ritmo:ritmo,demoraPorCliente:demoraPorCliente,turnoAhora:turnoAhora,hechosTurno:hechosTurno,TURNOS:TURNOS,arrastre:arrastre,calcularSalida:calcularSalida,estimarMin:estimarMin,controlDia:controlDia,avanceZona:avanceZona,resumenZona:resumenZona,compraDesdeVisita:compraDesdeVisita,proyectar:proyectar,ajustarMapa:ajustarMapa,moverEnLista:moverEnLista};
+    armarPlan:armarPlan,huecoInicio:huecoInicio,resumenControl:resumenControl,parseFecha:parseFecha,diasDesde:diasDesde,prioridadCompra:prioridadCompra,sinHorarioDesde:sinHorarioDesde,fmtDur:fmtDur,fmtCron:fmtCron,llegadaAbierta:llegadaAbierta,duraciones:duraciones,viajes:viajes,ritmo:ritmo,demoraPorCliente:demoraPorCliente,turnoAhora:turnoAhora,hechosTurno:hechosTurno,TURNOS:TURNOS,arrastre:arrastre,calcularSalida:calcularSalida,estimarMin:estimarMin,estadoCliente:estadoCliente,controlDia:controlDia,avanceZona:avanceZona,resumenZona:resumenZona,compraDesdeVisita:compraDesdeVisita,proyectar:proyectar,ajustarMapa:ajustarMapa,moverEnLista:moverEnLista};
 })();
 /* Generador mínimo de archivos Excel (.xlsx), sin librerías ni internet. Varias solapas, encabezado en negrita, anchos de columna y enlaces. */
 window.RepartoXlsx=(function(){
@@ -940,7 +947,7 @@ const URL_SCRIPT = "https://script.google.com/macros/s/AKfycbwhSdWNxq4FaniMZtIji
   }
 
   // ---------- PIN y rol ----------
-  const VER="12n";
+  const VER="12o";
   function estadoApp(){
     const t=$("verTxt"); if(!t) return;
     if(!("serviceWorker" in navigator)){ t.textContent="Versión "+VER+" · este navegador no puede guardar la app para usarla sin señal."; return; }
@@ -1176,7 +1183,7 @@ const URL_SCRIPT = "https://script.google.com/macros/s/AKfycbwhSdWNxq4FaniMZtIji
   function linkMaps(txt,url,cls){ const a=el("a",cls||"btnlink",txt); a.href=url; a.target="_blank"; a.rel="noopener"; return a; }
   function pendientesHoy(z){
     const zp=planZona(z), ev=P_.eventos(S.marcas), ini=P_.inicioDia(Date.now()), por={}; z.clientes.forEach(c=>{ por[c.cod]=c; });
-    return zp.orden.map(cod=>por[cod]).filter(c=>{ if(!c) return false; const e=ev[c.cod]||[], last=e[e.length-1], v=P_.ultimaVisita(e); return !(v&&v.ts>=ini)&&!(last&&last.t==="c"&&last.ts>=ini); });
+    return zp.orden.map(cod=>por[cod]).filter(c=>{ if(!c) return false; const e=ev[c.cod]||[], last=e[e.length-1], v=P_.ultimaVisita(e); return !(v&&v.ts>=ini)&&!P_.estadoCliente(e,Date.now(),ini).reciente&&!(last&&last.t==="c"&&last.ts>=ini); });
   }
   async function viajeOSRM(a,b){
     const ctl=new AbortController(), t=setTimeout(()=>ctl.abort(),6000);
@@ -1346,9 +1353,9 @@ const URL_SCRIPT = "https://script.google.com/macros/s/AKfycbwhSdWNxq4FaniMZtIji
     const zp=planZona(z), n=z.clientes.length, K=objetivo();
     const porCod={}; z.clientes.forEach((c,i)=>{ porCod[c.cod]={c:c,i:i}; });
     const ev=P_.eventos(S.marcas), ini=P_.inicioDia(Date.now()), hechos=zonaHechos(z);
-    const est=cod=>{ const e=ev[cod]||[], last=e[e.length-1], v=P_.ultimaVisita(e); return {hecho:!!(v&&v.ts>=ini),cerrado:!!(last&&last.t==="c"&&last.ts>=ini)}; };
+    const est=cod=>{ const e=ev[cod]||[], last=e[e.length-1], v=P_.ultimaVisita(e); return {antes:P_.estadoCliente(e,Date.now(),ini).reciente,hecho:!!(v&&v.ts>=ini),cerrado:!!(last&&last.t==="c"&&last.ts>=ini)}; };
     const pend=[], volver=[];
-    zp.orden.forEach(cod=>{ const r=porCod[cod]; if(!r) return; const e=est(cod); if(e.hecho) return; (e.cerrado?volver:pend).push(r.c); });
+    zp.orden.forEach(cod=>{ const r=porCod[cod]; if(!r) return; const e=est(cod); if(e.hecho||e.antes) return; (e.cerrado?volver:pend).push(r.c); });
     z.clientes.forEach(c=>{ if(est(c.cod).cerrado&&!volver.some(x=>x.cod===c.cod)) volver.push(c); });
     const pi=zp.partida?z.clientes.findIndex(c=>c.cod===zp.partida):-1;
     const off=i=>(((i-pi-1)%n)+n)%n;
@@ -1604,8 +1611,8 @@ const URL_SCRIPT = "https://script.google.com/macros/s/AKfycbwhSdWNxq4FaniMZtIji
     const d=el("div","rev "+(x.sev||"gris")), t=el("div","revt");
     t.appendChild(el("b",null,x.nom+" ("+x.cod+")")); t.appendChild(el("span","pilla "+(x.sev||"gris"),x.tag)); d.appendChild(t);
     { const dr=dirDe(x.cod); if(dr) d.appendChild(el("div","addr dirl",dr)); }
-    const partes=[]; if(conFecha&&x.fecha) partes.push(fmtDMY(new Date(x.fecha)).slice(0,5)); if(x.horaLlegada) partes.push("llegó "+x.horaLlegada); else if(x.hora) partes.push("marcó "+x.hora+((x.estado==="visita"||x.estado==="cerrado")?" (sin Llegué)":"")); partes.push(x.zona);
-    if(x.estado==="visita") partes.push(x.seg!=null?"estuvo "+P_.fmtDur(x.seg):"tiempo sin medir");
+    const partes=[]; if(conFecha&&x.fecha) partes.push(fmtDMY(new Date(x.fecha)).slice(0,5)); if(x.horaLlegada) partes.push("llegó "+x.horaLlegada); else if(x.hora&&!x.manual) partes.push("marcó "+x.hora+((x.estado==="visita"||x.estado==="cerrado")?" (sin Llegué)":"")); partes.push(x.zona);
+    if(x.estado==="visita"&&!x.manual) partes.push(x.seg!=null?"estuvo "+P_.fmtDur(x.seg):"tiempo sin medir");
     if(x.extra) partes.push(x.extra);
     d.appendChild(el("div","addr",partes.join(" · ")));
     if(x.compra){ const l=el("div","revx");
@@ -1641,7 +1648,7 @@ const URL_SCRIPT = "https://script.google.com/macros/s/AKfycbwhSdWNxq4FaniMZtIji
     const dias=[["Fecha","Día","Arrancó","Terminó","Jornada (min)","Visitas","Color del arranque","Zonas"]].concat(R.dias.map(D=>[f(D.fecha),DS[new Date(D.fecha).getDay()],D.hArranque,D.hFin,D.minutos,D.visitas,COL[D.clase],D.zonas.map(z=>z.zona).join(", ")]));
     const cli=[["Fecha","Llegada","Salida (marca)","Estado","Código","Cliente","Dirección","Zona","Estuvo (min)","Última compra","Días sin comprar","Compra desde la visita","Nota","Dónde marcó","Negocio"]].concat(R.clientes.map(x=>{
       const c=porCod[String(x.cod)]||{}, ult=/^sin compras?$/i.test(String(c.ult||"").trim())?"Sin compras desde "+P_.CFG.VENTAS_DESDE:(c.ult||""), dd=P_.diasDesde(ult,ahora), neg=linkNegocio(String(x.cod)), marc=(x.mapa&&String(x.mapa).indexOf("http")===0)?x.mapa:"";
-      return [f(x.fecha),x.horaLlegada||"",x.horaMarca||x.hora||"",x.tag,x.cod,x.nom,dirDe(x.cod),x.zona,x.seg==null?"":r1(x.seg/60),ult,dd==null?"":dd,x.compra==="compro"?"Compró el "+fmtDMY(new Date(x.compraFecha)):(x.compra==="sin"?"Sin compra desde la visita":(x.compra==="espera"?"En espera de facturación":"")),x.extra||"",marc?{url:marc,txt:"Ver dónde marcó"}:"",neg?{url:neg.url,txt:neg.txt}:""];
+      return [f(x.fecha),x.horaLlegada||"",x.manual?"":(x.horaMarca||x.hora||""),x.tag,x.cod,x.nom,dirDe(x.cod),x.zona,x.seg==null?"":r1(x.seg/60),ult,dd==null?"":dd,x.compra==="compro"?"Compró el "+fmtDMY(new Date(x.compraFecha)):(x.compra==="sin"?"Sin compra desde la visita":(x.compra==="espera"?"En espera de facturación":"")),x.extra||"",marc?{url:marc,txt:"Ver dónde marcó"}:"",neg?{url:neg.url,txt:neg.txt}:""];
     }));
     const ale=[["Tipo","Cliente","Zona","Fecha","Hora","Detalle"]].concat(R.revisar.filter(x=>x.tipo!=="salteado").map(x=>[x.tag,x.cliente,x.zona,f(x.fecha),x.hora||"",x.detalle||""]));
     return [
@@ -1651,6 +1658,70 @@ const URL_SCRIPT = "https://script.google.com/macros/s/AKfycbwhSdWNxq4FaniMZtIji
       {nombre:"Alertas",encabezado:true,anchos:[20,36,18,12,8,60],filas:ale}
     ];
   }
+  // ---------- Cargar a mano las visitas que Pablo hizo y no marcó (solo Adrián) ----------
+  const MOTIVO_MANUAL="Cargada a mano por Adrián (no se marcó en el momento)";
+  const isoLocal=ms=>{ const x=new Date(ms); return x.getFullYear()+"-"+pad(x.getMonth()+1)+"-"+pad(x.getDate()); };
+  async function enviarLote(regs){
+    let ok=[]; if(configurado&&navigator.onLine){ try{ ok=await apiEnviar(regs); }catch(e){} }
+    regs.forEach(reg=>{ if(ok.indexOf(reg.id)<0){ reg.offline=true; const q=cola(); q.push(reg); lsSet(COLA_KEY,q); } nuevaMarca(reg); });
+    pintarCola(); return ok.length;
+  }
+  function pintarManual(){
+    const box=$("cManual"); box.replaceChildren();
+    if(!S.manualAbierto){ box.classList.add("hidden"); return; }
+    box.classList.remove("hidden");
+    if(!S.zonas.length){ box.appendChild(el("p",null,"Todavía no hay zonas cargadas.")); return; }
+    const ahora=Date.now(), DIA=86400000, hoyD=hoy0().getTime(), ini=P_.inicioDia(ahora);
+    if(!S.mZona||!S.zonas.some(z=>z.id===S.mZona)) S.mZona=(S.zonaSel&&S.zonas.some(z=>z.id===S.zonaSel))?S.zonaSel:S.zonas[0].id;
+    if(!S.mFecha) S.mFecha=isoLocal(hoyD-DIA);
+    if(!S.mSel) S.mSel={};
+    const z=S.zonas.find(x=>x.id===S.mZona), ev=P_.eventos(S.marcas);
+    const p=String(S.mFecha).split("-").map(Number), base=(p.length===3&&p[0])?new Date(p[0],p[1]-1,p[2],12,0,0).getTime():null;
+    const sec=el("div","sec");
+    sec.appendChild(el("h3",null,"Cargar visitas que faltaron"));
+    sec.appendChild(el("div","addr","Para clientes que Pablo visitó pero no marcó. Se guardan como visitados, sin ubicación y con la fecha que elijas, y dejan de aparecer en la lista de Hoy."));
+    if(S.mMsg){ sec.appendChild(el("div","note ok",S.mMsg)); }
+    const fila=el("div","mfila");
+    const sz=el("select"); sz.id="mZona"; S.zonas.forEach(zz=>{ const o=el("option",null,zz.nombre); o.value=zz.id; sz.appendChild(o); }); sz.value=S.mZona;
+    sz.addEventListener("change",()=>{ S.mZona=sz.value; S.mSel={}; S.mMsg=""; pintarManual(); });
+    const fd=el("input"); fd.type="date"; fd.id="mFecha"; fd.value=S.mFecha; fd.max=isoLocal(hoyD); fd.min=isoLocal(hoyD-19*DIA);
+    fd.addEventListener("change",()=>{ S.mFecha=fd.value; S.mMsg=""; pintarManual(); });
+    fila.appendChild(sz); fila.appendChild(fd); sec.appendChild(fila);
+    const pend=z.clientes.filter(c=>!P_.estadoCliente(ev[c.cod],ahora,ini).reciente);
+    const q=sinAcentos(S.mBusca||""), lista=q?pend.filter(c=>sinAcentos([c.nom,c.cod,c.dir,c.loc].join(" ")).indexOf(q)>=0):pend;
+    const bus=el("input"); bus.type="search"; bus.id="mBuscar"; bus.placeholder="Buscar por calle, nombre o código"; bus.value=S.mBusca||"";
+    bus.addEventListener("change",()=>{ S.mBusca=bus.value; pintarManual(); }); sec.appendChild(bus);
+    const compro=c=>{ const t=P_.parseFecha(c.ult); return t!=null&&base!=null&&t>=P_.inicioDia(base); };
+    const acc=el("div","mfila");
+    const bC=el("button",null,"Marcar los que compraron desde esa fecha"); bC.id="mCompraron"; bC.addEventListener("click",()=>{ pend.forEach(c=>{ if(compro(c)) S.mSel[c.cod]=true; }); pintarManual(); });
+    const bT=el("button",null,"Marcar todos los de la lista"); bT.id="mTodos"; bT.addEventListener("click",()=>{ lista.forEach(c=>{ S.mSel[c.cod]=true; }); pintarManual(); });
+    const bN=el("button",null,"Ninguno"); bN.id="mNinguno"; bN.addEventListener("click",()=>{ S.mSel={}; pintarManual(); });
+    acc.appendChild(bC); acc.appendChild(bT); acc.appendChild(bN); sec.appendChild(acc);
+    sec.appendChild(el("div","addr",pend.length+" cliente"+(pend.length===1?"":"s")+" de "+z.nombre+" sin visita en los últimos "+P_.CFG.DIAS_CICLO+" días"+(q?" · mostrando "+lista.length:"")+"."));
+    const btn=el("button",null,""); btn.id="mGuardar";
+    const actualizar=()=>{ const n=Object.keys(S.mSel).length; btn.textContent=n?("Guardar "+n+" visita"+(n===1?"":"s")+" como visitada"+(n===1?"":"s")):"Elegí los clientes para guardar"; btn.disabled=!n||base==null; };
+    const caja=el("div","mlista");
+    lista.forEach(c=>{
+      const row=el("label","mrow"), cb=el("input"); cb.type="checkbox"; cb.className="mchk"; cb.checked=!!S.mSel[c.cod]; cb.dataset.cod=c.cod;
+      cb.addEventListener("change",()=>{ if(cb.checked) S.mSel[c.cod]=true; else delete S.mSel[c.cod]; actualizar(); });
+      const info=el("div"); info.appendChild(el("div","mdir",(c.dir&&String(c.dir).trim())||c.nom));
+      info.appendChild(el("div","mname",c.nom+"  ·  "+c.cod+(c.loc?"  ·  "+c.loc:"")));
+      const tg=el("div"); if(compro(c)) tg.appendChild(el("span","tag green","Compró el "+fmtDMY(new Date(P_.parseFecha(c.ult))))); else { const pc=P_.prioridadCompra(c.ult,ahora); if(pc) tg.appendChild(el("span","tag "+(pc.cls||"gray"),pc.txt)); }
+      info.appendChild(tg); row.appendChild(cb); row.appendChild(info); caja.appendChild(row);
+    });
+    sec.appendChild(caja);
+    btn.addEventListener("click",async()=>{
+      const cods=Object.keys(S.mSel).filter(cod=>z.clientes.some(c=>c.cod===cod)); if(!cods.length||base==null) return;
+      if(!confirm("Vas a registrar "+cods.length+" visita"+(cods.length===1?"":"s")+" del "+fmtDMY(new Date(base))+", sin ubicación. ¿Confirmás?")) return;
+      btn.disabled=true; btn.textContent="Guardando…";
+      const regs=cods.map((cod,i)=>{ const c=z.clientes.find(x=>x.cod===cod), ts=base+i*60000; return {id:"visita-"+c.cod+"-"+ts,tipo:"visita",cod:c.cod,nom:c.nom,zona:z.nombre,ts:ts,offline:false,motivo:MOTIVO_MANUAL}; });
+      await enviarLote(regs);
+      S.mSel={}; S.mMsg=regs.length+" visita"+(regs.length===1?"":"s")+" cargada"+(regs.length===1?"":"s")+" con fecha "+fmtDMY(new Date(base))+". Ya no aparecen como pendientes en Hoy.";
+      pintarManual(); pintarHoy(); pintarControl();
+    });
+    sec.appendChild(btn); actualizar(); box.appendChild(sec);
+  }
+  $("cManualBtn").addEventListener("click",()=>{ S.manualAbierto=!S.manualAbierto; S.mMsg=""; pintarManual(); if(S.manualAbierto&&$("cManual").scrollIntoView) $("cManual").scrollIntoView({behavior:"smooth",block:"start"}); });
   async function pintarControl(){
     const r=rangoControl(), tok=S.ctlTok=(S.ctlTok||0)+1; S.ctlUlt=null; $("cExcel").disabled=true;
     document.querySelectorAll(".modos button").forEach(b=>b.setAttribute("aria-pressed",String(b.dataset.m===S.ctlModo)));
